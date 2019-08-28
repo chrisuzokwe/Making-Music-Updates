@@ -5,7 +5,7 @@
 
 #include "ServoHandler.h"
 
-int BPM = 90; //Desired BPM
+int BPM = 176; //Desired BPM
 int quarter = 60000/BPM; //BPM to Millis (Beat Length) (4/4 Time) (1/4th Note)
 int half = quarter*2; // 1/2 Note
 int whole = quarter*4; // Whole Note
@@ -18,7 +18,7 @@ int upTime = quarter/3; // least amount of time a servocan wait before having to
 //**Servos can also move automatically or with manual control.**/
 
 ServoHandler::ServoHandler() {
-    range =  new int[2]{80,110}; // Servo's range
+    range =  new int[2]{70,110}; // Servo's range
     control = 0; // 0 - Manual Control  1 - Automatic On
     mode = 0; // 0 - Striking Servo   1 - Positional Servo
 

@@ -3,8 +3,9 @@ MAKING MUSIC 2019 Program Code -- Modified By Chris Uzokwe
 
 TODO: 
 
-  1. Refine Algoritithm for sorting and removing duplicates from positional array
+  1. Refine Algoritithm for sorting and removing duplicate servo positions from positional array
   2. Draft function to update parameters recieved from iPad
+  3. Add functionality to account for rests
 
  Adafruit invests time and resources providing this open source code,
  please support Adafruit and open-source hardware by purchasing
@@ -128,34 +129,54 @@ void setup(void)
 {
 
   
-/**TEST INPUT PARAMETERS
-  servo_obj[servo_idx].sequence[0] = 4;
-  servo_obj[servo_idx].sequence[1] = 4;
-  servo_obj[servo_idx].sequence[2] = 4;
-  servo_obj[servo_idx].sequence[3] = 4;
-  servo_obj[servo_idx].sequence[4] = 4;
-  servo_obj[servo_idx].sequence[5] = 4;
-  servo_obj[servo_idx].sequence[6] = 4;
+//TEST INPUT PARAMETERS: UNCOMMENT TO TEST
 
-  servo_obj[servo_idx].positions[0] = 20;
-  servo_obj[servo_idx].positions[1] = 30;
-  servo_obj[servo_idx].positions[2] = 40;
-  servo_obj[servo_idx].sequence[3] = 50;
-  servo_obj[servo_idx].positions[4] = 60;
-  servo_obj[servo_idx].positions[5] = 70;
-  servo_obj[servo_idx].sequence[6] = 80;
+/*
+      //SERVO 1
+  servo_obj[0].sequence[0] = 4;
+  servo_obj[0].sequence[1] = 2;
+  servo_obj[0].sequence[2] = 2;
+  servo_obj[0].sequence[3] = 4;
+
+  servo_obj[0].positions[0] = 17;
+  servo_obj[0].positions[1] = 24;
+  servo_obj[0].positions[2] = 30;
+  servo_obj[0].positions[3] = 40;
   
-  servo_obj[servo_idx].mode = 1;
-  servo_obj[servo_idx].control = 0;
+  servo_obj[0].mode = 1;
+  servo_obj[0].control = 0;
 
+      //SERVO 2
   servo_obj[1].mode = 0;
   servo_obj[1].control = 1;
 
   servo_obj[1].sequence[0] = 4;
-  servo_obj[1].sequence[1] = 4;  
-  servo_obj[1].sequence[2] = 4;
+  servo_obj[1].sequence[1] = 2;
+  servo_obj[1].sequence[2] = 2;
   servo_obj[1].sequence[3] = 4;
-*/
+  servo_obj[1].sequence[4] = 4;
+  servo_obj[1].sequence[5] = 4;
+
+      //SERVO 3
+   servo_obj[2].mode = 0;
+  servo_obj[2].control = 0;
+
+  servo_obj[2].sequence[0] = 2;
+  servo_obj[2].sequence[1] = 2;  
+  servo_obj[2].sequence[2] = 8;
+
+      //SERVO 4
+   servo_obj[3].sequence[0] = 2;
+  servo_obj[3].sequence[1] = 2;
+  servo_obj[3].sequence[2] = 8;
+
+
+  servo_obj[3].positions[0] = 20;
+  servo_obj[3].positions[1] = 30;
+  
+  servo_obj[3].mode = 1;
+  servo_obj[3].control = 0;*/
+
   
   /* SETUP SERVO PINS */
     for (int i = 0; i < pin_pairs; i++) {
@@ -164,7 +185,9 @@ void setup(void)
   }
 
   pinMode(13, OUTPUT); // Information recieved indicator
-  
+
+
+  if(Serial){
   while (!Serial);  // required for Flora & Micro
   delay(500);
 
@@ -176,11 +199,15 @@ void setup(void)
   /* Initialise the module */
   Serial.print(F("Initialising the Bluefruit LE module: "));
 
+  }
   if ( !ble.begin(VERBOSE_MODE) )
   {
     error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
   }
+
+  if(Serial){
   Serial.println( F("OK!") );
+  }
 
   if ( FACTORYRESET_ENABLE )
   {
@@ -194,13 +221,16 @@ void setup(void)
   /* Disable command echo from Bluefruit */
   ble.echo(false);
 
+if(Serial){
   Serial.println("Requesting Bluefruit info:");
+
   /* Print Bluefruit information */
   ble.info();
 
   Serial.println(F("Please use Adafruit Bluefruit LE app to connect in UART mode"));
   Serial.println(F("Then Enter characters to send to Bluefruit"));
   Serial.println();
+}
 
   ble.verbose(false);  // debug info is a little annoying after this point!
 
@@ -213,10 +243,14 @@ void setup(void)
   if ( ble.isVersionAtLeast(MINIMUM_FIRMWARE_VERSION) )
   {
     // Change Mode LED Activity
+    if(Serial){
     Serial.println(F("******************************"));
     Serial.println(F("Change LED activity to " MODE_LED_BEHAVIOUR));
+    }
     ble.sendCommandCheckOK("AT+HWModeLED=" MODE_LED_BEHAVIOUR);
+    if(Serial){
     Serial.println(F("******************************"));
+    }
   }
 }
 
@@ -462,10 +496,25 @@ bool changeServoAngle(String newAngle)
       servo_range[uartServo][0] = uartMin;
       servo_range[uartServo][1] = uartMax; 
 
-      //** Change Servo Params... EXAMPLE**//
+          //** Change Servo Params... **EXAMPLE FOR UARTSERVO**//
+      
 
-     // servo_obj[uartServo].control = ctrlVal;
-     // servo_obj[uartServo].mode = mdVal;
+     // servo_obj[uartServo].control = ctrlVal; <-- SET CONTROL VALUE: when the control is 0 servos are manually moved, when control is 1, servos move automatically
+     // servo_obj[uartServo].mode = mdVal; <-- SET MODE VALUE: when the mode is 0, servos move anywhere from their min to max range set, when 1, servos only move between given positions (without duplicate positions)
+
+     // servo_obj[uartServo].range[0] = uartMin;
+     // servo_obj[uartServo].range[1] = uartMax; <-- set servo range as normal, with new handler
+
+     // for (int i = 0; i = "servosequencelength"; i++){  <-- iterate through servo position/notelength combos and allocate them in our servo's array
+     //  servo_obj[uartServo].sequence[i] = "iPADsequence[i]";
+     //  servo_obj[uartServo].position[i] = "iPADposition[i]"
+     //  }
+
+     //servo_obj[uartServo].countNotes(); <-- run function to calculate rest of relevant params (see ServoHandler)
+
+     //setBPM("iPadBPMValue"); <-- optional function for if you want to change the BPM of the song
+
+     
 
       digitalWrite(13,HIGH); // LED PIN 13 Indicates Information is Being Written...
 //     );
