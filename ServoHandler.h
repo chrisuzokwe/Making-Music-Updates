@@ -1,4 +1,4 @@
-
+ 
 
 //
 // Handler for Servo Sequences - Making Music
@@ -9,6 +9,13 @@
 #define ServoHandler_h
 
 #include <stdio.h>
+
+extern int BPM; //Desired BPM
+extern int quarter; //BPM to Millis (Beat Length) (4/4 Time) (1/4th Note)
+extern int half; // 1/2 Note
+extern int whole; // Whole Note
+extern int eighth; // 1/8 Note
+extern int upTime; // least amount of time a servo can wait before having to be ready for the next note
 
 
 enum noteLength {
@@ -26,25 +33,29 @@ class ServoHandler {
    
     //int servoNum; Not Sure if this is needed
     
-    bool control = 0; // 0 - Manual Control   1 - Sequencer On
-    bool mode = 0; // 0 - Striking Servo   1 - Positional Servo
+    bool control; // 0 - Manual Control   1 - Sequencer On
+    int mode; // 0 - Striking Servo   1 - Positional Servo
 
-    int waitTime = 0;
-    unsigned long lastHitTime = 0;
-    int returnTime = 0;
+    int waitTime;
+    unsigned long lastHitTime;
+    unsigned long returnTime;
     
-    int numNotes = 0;
-    int numSingleNotes = 0;
+    int numNotes;
+    int numSingleNotes;
     int *sequence; //
     int *positions; //
     int *noDupPos; // 
-    int seqIdx = 0;
+    int seqIdx;
     void sequenceStep(); //
     void countNotes(); //
 
         
         
 };
+
+void setBPM(int measure);
+
+int compare (const void * a, const void * b);
 
     
     

@@ -1,12 +1,18 @@
+
+
 /*********************************************************************
 MAKING MUSIC 2019 Program Code -- Modified By Chris Uzokwe
 
 TODO: 
 
-  1. Refine Algoritithm for sorting and removing duplicate servo positions from positional array
-  2. Draft function to update parameters recieved from iPad
-  3. Add functionality to account for rests
+  1. Refine Algoritithm for sorting and removing duplicate servo positions from positional array (divide by number)
+  2. Add functionality to account for rests
+  3. rm range
+  4. manual stuff first - map to range & map to positions and step
+  
 
+Relevant Licenses and Contributions :
+  
  Adafruit invests time and resources providing this open source code,
  please support Adafruit and open-source hardware by purchasing
  products from Adafruit!
@@ -22,41 +28,27 @@ TODO:
 #include "Adafruit_BLE.h"
 #include "Adafruit_BluefruitLE_SPI.h"
 #include "Adafruit_BluefruitLE_UART.h"
-
 #include "BluefruitConfig.h"
-
 #include "ServoHandler.h"
 
 #if SOFTWARE_SERIAL_AVAILABLE
   #include <SoftwareSerial.h>
 #endif
 
-/* SERVO SETTINGS */
+#define MSGDEBUG 0
+#define ANLOGDEBUG 0
+
+/* SERVO INIT & IO */
 
 const int pin_pairs = 4;
-
 Servo servos[pin_pairs];
-
 int servo_pins[pin_pairs] = {3,5,6,9}; 
-
 int analog_pins[pin_pairs] = {A0,A1,A2,A3};
+ServoHandler servo_obj[pin_pairs]; // Non-physical parameter handler for all servos
 
-int servo_range[pin_pairs][2] = {
-    { 5, 175 }, // Servo 1, pins 3-A0
-    { 5, 175 }, // Servo 2, pins 5-A1
-    { 5, 175 }, // Servo 3, pins 6-A2
-    { 5, 175 }  // Servo 4, pins 9-A3
-};
-
-ServoHandler servo_obj[pin_pairs]; // Init parameter handler for all servos
-
-//settings for uart incoming functions
-int uartServo = 0; //servo num
-int uartMax = 0; //max angle
-int uartMin = 0; //min angle
-int uartComma = 0;//position of comma
 unsigned long elapsed = 0; //Time passed since program start
-int servo_idx = 0;
+int servo_idx = 0; //Indexing variable
+bool autoToggle = 0; // Auto Servos on(1)/off(0)
 /*=========================================================================
     APPLICATION SETTINGS
 
@@ -128,70 +120,19 @@ void error(const __FlashStringHelper*err) {
 void setup(void)
 {
 
-  
-//TEST INPUT PARAMETERS: UNCOMMENT TO TEST
-
-/*
-      //SERVO 1
-  servo_obj[0].sequence[0] = 4;
-  servo_obj[0].sequence[1] = 2;
-  servo_obj[0].sequence[2] = 2;
-  servo_obj[0].sequence[3] = 4;
-
-  servo_obj[0].positions[0] = 17;
-  servo_obj[0].positions[1] = 24;
-  servo_obj[0].positions[2] = 30;
-  servo_obj[0].positions[3] = 40;
-  
-  servo_obj[0].mode = 1;
-  servo_obj[0].control = 0;
-
-      //SERVO 2
-  servo_obj[1].mode = 0;
-  servo_obj[1].control = 1;
-
-  servo_obj[1].sequence[0] = 4;
-  servo_obj[1].sequence[1] = 2;
-  servo_obj[1].sequence[2] = 2;
-  servo_obj[1].sequence[3] = 4;
-  servo_obj[1].sequence[4] = 4;
-  servo_obj[1].sequence[5] = 4;
-
-      //SERVO 3
-   servo_obj[2].mode = 0;
-  servo_obj[2].control = 0;
-
-  servo_obj[2].sequence[0] = 2;
-  servo_obj[2].sequence[1] = 2;  
-  servo_obj[2].sequence[2] = 8;
-
-      //SERVO 4
-   servo_obj[3].sequence[0] = 2;
-  servo_obj[3].sequence[1] = 2;
-  servo_obj[3].sequence[2] = 8;
-
-
-  servo_obj[3].positions[0] = 20;
-  servo_obj[3].positions[1] = 30;
-  
-  servo_obj[3].mode = 1;
-  servo_obj[3].control = 0;*/
-
+  Serial.begin(115200);
   
   /* SETUP SERVO PINS */
     for (int i = 0; i < pin_pairs; i++) {
     servos[i].attach(servo_pins[i]);
-    servo_obj[i].countNotes();
+    //servo_obj[i].countNotes();
   }
 
-  pinMode(13, OUTPUT); // Information recieved indicator
-
+  pinMode(13, OUTPUT); // Information Writing indicator
 
   if(Serial){
   while (!Serial);  // required for Flora & Micro
-  delay(500);
-
-  Serial.begin(115200);
+  delay(500); 
   
   Serial.println(F("Adafruit Bluefruit Command Mode Example"));
   Serial.println(F("---------------------------------------"));
@@ -239,6 +180,7 @@ if(Serial){
       delay(500);
   }
 
+
   // LED Activity command is only supported from 0.6.6
   if ( ble.isVersionAtLeast(MINIMUM_FIRMWARE_VERSION) )
   {
@@ -261,150 +203,98 @@ if(Serial){
 void loop(void)
 {
   elapsed = millis(); // Check total program run time, all servos are globally dependent on this clock 
-
+  
   /***AUTOMATIC CONTROL***/
+  if(autoToggle){ /*turn on or off automatic servos
   /*for loop tells STRIKING SERVOS at what time they must rise to be ready for next note*/
   for(servo_idx = 0; servo_idx < pin_pairs; servo_idx++){
     if(servo_obj[servo_idx].control == 1){
-    if(elapsed - servo_obj[servo_idx].lastHitTime > servo_obj[servo_idx].returnTime){
-       if(servo_obj[servo_idx].mode == 0){
-      servos[servo_idx].write(servo_obj[servo_idx].range[0]);}
-    }}}
-  /*for loop writes each POSITIONAL SERVO'S next desination, cycles through list*/
+      if(elapsed  > servo_obj[servo_idx].lastHitTime + servo_obj[servo_idx].returnTime){
+         if(servo_obj[servo_idx].mode == 0){
+            servos[servo_idx].write(servo_obj[servo_idx].positions[0]);
+            }
+           }
+          }
+         }
+    
+  /*for loop tells STRIKING SERVO to hit, or writes each POSITIONAL SERVO'S next destination and cycles through list*/
   for(servo_idx = 0; servo_idx < pin_pairs; servo_idx++){
     if(servo_obj[servo_idx].control == 1){
-    if(elapsed - servo_obj[servo_idx].lastHitTime > servo_obj[servo_idx].waitTime){
-      if(servo_obj[servo_idx].mode == 0){
-      servos[servo_idx].write(servo_obj[servo_idx].range[1]);}
-      else if(servo_obj[servo_idx].mode == 1){
-      servos[servo_idx].write(servo_obj[servo_idx].positions[servo_obj[servo_idx].seqIdx]);  
+      if(elapsed - servo_obj[servo_idx].lastHitTime > servo_obj[servo_idx].waitTime){
+        if(servo_obj[servo_idx].mode == 0){
+          servos[servo_idx].write(servo_obj[servo_idx].positions[1]);
+          }
+        else if(servo_obj[servo_idx].mode == 1){
+          servos[servo_idx].write(servo_obj[servo_idx].positions[servo_obj[servo_idx].seqIdx]);  
+          }
+        servo_obj[servo_idx].lastHitTime = elapsed;
+        servo_obj[servo_idx].sequenceStep();
+       }
       }
-      servo_obj[servo_idx].lastHitTime = elapsed;
-      servo_obj[servo_idx].sequenceStep();}}}
-
+     }
+    }
   
   /***MANUAL CONTROL***/
   /*each analog pin is polled so its value can be written to appropriate servo....*/
   for (int i = 0; i < pin_pairs; i++) {
-      int analog_value = analogRead(analog_pins[i]);   
-      int servo_angle = map(
-         analog_value,      // Analog value
+
+      int analog_value = analogRead(analog_pins[i]);
+
+      #if ANLOGDEBUG
+        Serial.print("SERVO: ");
+        Serial.print(i+1);
+        Serial.print(" | MODE: ");
+        Serial.print(servo_obj[i].mode);
+        Serial.print(" | ANALOGVAL: ");
+        Serial.println(analog_value);
+        Serial.print("VALUE WRITTEN: ");
+      #endif        
+
+           int servo_angle = map(
+          analog_value,      // Analog value
           0,                 // Minimum analog value
           1023,              // Maximum analog value
-          servo_range[i][0], // Minimum servo angle
-          servo_range[i][1]  // Maximum servo angle
+          servo_obj[i].positions[0], // Minimum servo angle
+          servo_obj[i].positions[1]  // Maximum servo angle
        );
+
     if(servo_obj[i].control == 0){ 
-        /*.....if a servo is a POSITIONAL SERVO, depending on how many individual notes it has, potentiometer pins are locked between those values....*/
-         if(servo_obj[i].mode == 1){
+       /*...STANDARD SERVOS are mapped directly to angles recieved.*/                 
+          if(servo_obj[i].mode == 0){
+            servos[i].write(servo_angle);
+
+            #if ANLOGDEBUG
+              Serial.println(servo_angle);
+            #endif
+          }
           
-          switch(servo_obj[i].numSingleNotes){
+        /*.....if a servo is a QUANTIZED SERVO, depending on how many individual notes it has, potentiometer pins are locked between those values....*/
+          else if(servo_obj[i].mode == 1){
+            int index = round( ( (float)analog_value/(float)1024.0 ) * (float)(servo_obj[i].numNotes - 1) );
+            servos[i].write(servo_obj[i].positions[index]); 
+              
+            #if ANLOGDEBUG
+              Serial.println(servo_obj[i].positions[index]);
+            #endif
+           }
+           
+         /*A Mode of 2 Means every trigger will STEP the servo through its sequence*/
+         else if(servo_obj[i].mode == 2){
+          if(analog_value < 511){
+            servos[i].write(servo_obj[i].positions[servo_obj[i].seqIdx]);
             
-            case 1:
-              servos[i].write(servo_obj[i].noDupPos[0]);
-              break;
-
-            case 2:
-                if(servo_angle<90){
-                servos[i].write(servo_obj[i].noDupPos[0]);}
-                else if (servo_angle>90){
-                servos[i].write(servo_obj[i].noDupPos[1]);}
-                break;
-
-            case 3:
-
-                if(servo_angle>5 && servo_angle<61){
-                  servos[i].write(servo_obj[i].noDupPos[0]);}
-                else if(servo_angle>60 && servo_angle<116){
-                  servos[i].write(servo_obj[i].noDupPos[1]);}
-                else if(servo_angle>115 && servo_angle<175){
-                  servos[i].write(servo_obj[i].noDupPos[2]);}
-                break;
-
-            case 4:
-
-              if(servo_angle>5 && servo_angle<43){
-                  servos[i].write(servo_obj[i].noDupPos[0]);}
-                else if(servo_angle>42 && servo_angle<86){
-                  servos[i].write(servo_obj[i].noDupPos[1]);}
-                else if(servo_angle>85 && servo_angle<129){
-                  servos[i].write(servo_obj[i].noDupPos[2]);}
-                else if(servo_angle>128 && servo_angle<175){
-                  servos[i].write(servo_obj[i].noDupPos[3]);}
-                break;
-
-            case 5:
-
-            if(servo_angle>5 && servo_angle<39){
-                  servos[i].write(servo_obj[i].noDupPos[0]);}
-                else if(servo_angle>38 && servo_angle<73){
-                  servos[i].write(servo_obj[i].noDupPos[1]);}
-                else if(servo_angle>72 && servo_angle<106){
-                  servos[i].write(servo_obj[i].noDupPos[2]);}
-                else if(servo_angle>105 && servo_angle<140){
-                  servos[i].write(servo_obj[i].noDupPos[3]);}
-                else if(servo_angle>139 && servo_angle<175){
-                  servos[i].write(servo_obj[i].noDupPos[4]);}
-                break;
-
-            case 6:
-
-             if(servo_angle>5 && servo_angle<33){
-                  servos[i].write(servo_obj[i].noDupPos[0]);}
-                else if(servo_angle>32 && servo_angle<62){
-                  servos[i].write(servo_obj[i].noDupPos[1]);}
-                else if(servo_angle>61 && servo_angle<89){
-                  servos[i].write(servo_obj[i].noDupPos[2]);}
-                else if(servo_angle>88 && servo_angle<116){
-                  servos[i].write(servo_obj[i].noDupPos[3]);}
-                else if(servo_angle>115 && servo_angle<143){
-                  servos[i].write(servo_obj[i].noDupPos[4]);}
-                else if(servo_angle>142 && servo_angle<175){
-                  servos[i].write(servo_obj[i].noDupPos[5]);}
-                break;
-
-            case 7:
-
-               if(servo_angle>5 && servo_angle<30){
-                  servos[i].write(servo_obj[i].noDupPos[0]);}
-                else if(servo_angle>29 && servo_angle<55){
-                  servos[i].write(servo_obj[i].noDupPos[1]);}
-                else if(servo_angle>54 && servo_angle<80){
-                  servos[i].write(servo_obj[i].noDupPos[2]);}
-                else if(servo_angle>79 && servo_angle<105){
-                  servos[i].write(servo_obj[i].noDupPos[3]);}
-                else if(servo_angle>104 && servo_angle<130){
-                  servos[i].write(servo_obj[i].noDupPos[4]);}
-                else if(servo_angle>129 && servo_angle<155){
-                  servos[i].write(servo_obj[i].noDupPos[5]);}
-                else if(servo_angle>154 && servo_angle<175){
-                  servos[i].write(servo_obj[i].noDupPos[6]);}
-                break;
-
-            case 8:
-
-            if(servo_angle>5 && servo_angle<27){
-                  servos[i].write(servo_obj[i].noDupPos[0]);}
-                else if(servo_angle>26 && servo_angle<49){
-                  servos[i].write(servo_obj[i].noDupPos[1]);}
-                else if(servo_angle>48 && servo_angle<71){
-                  servos[i].write(servo_obj[i].noDupPos[2]);}
-                else if(servo_angle>70 && servo_angle<93){
-                  servos[i].write(servo_obj[i].noDupPos[3]);}
-                else if(servo_angle>92 && servo_angle<114){
-                  servos[i].write(servo_obj[i].noDupPos[4]);}
-                else if(servo_angle>113 && servo_angle<135){
-                  servos[i].write(servo_obj[i].noDupPos[5]);}
-                else if(servo_angle>134 && servo_angle<156){
-                  servos[i].write(servo_obj[i].noDupPos[6]);}
-                else if(servo_angle>155 && servo_angle<175){
-                  servos[i].write(servo_obj[i].noDupPos[7]);}
-                break;
-                        }}
-       /*...STRIKING SERVOS are mapped directly to angles recieved.*/                 
-          else{
-       servos[i].write(servo_angle);
-         }}}  
+            #if ANLOGDEBUG
+              Serial.println(servo_obj[i].positions[servo_obj[i].seqIdx]);
+            #endif
+            
+            servo_obj[i].sequenceStep();       
+            }
+           }  
+          }
+          #if ANLOGDEBUG
+           Serial.println("-------------------------------------------------------");
+          #endif
+         }
    
   digitalWrite(13,LOW); // Servo params are not being written -- indicator off
   
@@ -414,8 +304,10 @@ void loop(void)
   if ( getUserInput(inputs, BUFSIZE) )
   {
     // Send characters to Bluefruit
+#if MSGDEBUG
     Serial.print("[Send] ");
     Serial.println(inputs);
+#endif
 
     ble.print("AT+BLEUARTTX=");
     ble.println(inputs);
@@ -433,16 +325,19 @@ void loop(void)
     // no data
     return;
   }
+  
   // Some data was found, its in the buffer
-  Serial.print("data found...");
-  Serial.print(F("[Recv] ")); 
-  Serial.println(ble.buffer);
+  #if MSGDEBUG
+    Serial.print("data found...");
+    Serial.print(F("[Recv] ")); 
+    Serial.println(ble.buffer);
+  #endif
+  
   String mydata = String(ble.buffer);
-  //get function
-  String myfunc = mydata.substring(0,2);
-  //change angle function
-  if (myfunc == 'ANG') { changeServoAngle(mydata); }
-  ble.waitForOK();}
+  parseAndUpdate(mydata);
+  ble.waitForOK();
+  //Serial.flush();
+  }
 
 
 /**************************************************************************/
@@ -467,56 +362,120 @@ bool getUserInput(char buffer[], uint8_t maxSize)
 }
 
 
+
 /**************************************************************************/
-  //  Changes User Input String Into Servo Max and Min
+  // decodes recieved strings and updates parameters accordingly
 /**************************************************************************/
-bool changeServoAngle(String newAngle)
-{
-  //example incoming command:  ANG122,233
-    //settings
-    uartServo = newAngle.substring(3,4).toInt(); //servo num
-    uartMax = 0; //max angle
-    uartMin = 0; //min angle
-    uartComma = newAngle.indexOf(',');
-    int x = newAngle.length(); //length of incoming string
+void parseAndUpdate(String mydata){
 
-    //get min angle
-    if(uartComma == 6) { 
-        ;
-        uartMin = newAngle.substring(4,6).toInt();
-        uartMax = newAngle.substring(7,x).toInt();
-    }
-    else {
-      //uartComma = "7";
-      uartMin = newAngle.substring(4,7).toInt();
-      uartMax = newAngle.substring(8,x).toInt();
-     }
-    //change servo angle
-      //change servo angle array
-      servo_range[uartServo][0] = uartMin;
-      servo_range[uartServo][1] = uartMax; 
+    //get function & params
+  String myfunc = mydata.substring(0,3);
+  int uartServo = mydata.substring(3,4).toInt();
+  mydata.remove(0,4);
+  int strLength = mydata.length();
 
-          //** Change Servo Params... **EXAMPLE FOR UARTSERVO**//
-      
+  #if MSGDEBUG
+      Serial.print("SERVO: ");
+      Serial.print(uartServo+1);
+      Serial.print(" | FUNC: ");
+      Serial.println(myfunc);
+      Serial.print("REMAINING STRING: ");
+      Serial.print(mydata);
+      Serial.print(" | LENGTH: ");
+      Serial.println(strLength);
+  #endif
 
-     // servo_obj[uartServo].control = ctrlVal; <-- SET CONTROL VALUE: when the control is 0 servos are manually moved, when control is 1, servos move automatically
-     // servo_obj[uartServo].mode = mdVal; <-- SET MODE VALUE: when the mode is 0, servos move anywhere from their min to max range set, when 1, servos only move between given positions (without duplicate positions)
+  
+      if(myfunc == "BPM"){   
+          setBPM(mydata.toInt());
 
-     // servo_obj[uartServo].range[0] = uartMin;
-     // servo_obj[uartServo].range[1] = uartMax; <-- set servo range as normal, with new handler
+      #if MSGDEBUG
+          Serial.print("New BPM: ");
+          Serial.println(BPM);
+      #endif
+      }
+          
+    else if(myfunc == "ANG"){
+        servo_obj[uartServo].range[0] = mydata.substring(0,mydata.indexOf(',')).toInt();
+        servo_obj[uartServo].range[1] = mydata.substring(mydata.indexOf(','),mydata.length()).toInt();
 
-     // for (int i = 0; i = "servosequencelength"; i++){  <-- iterate through servo position/notelength combos and allocate them in our servo's array
-     //  servo_obj[uartServo].sequence[i] = "iPADsequence[i]";
-     //  servo_obj[uartServo].position[i] = "iPADposition[i]"
-     //  }
+        #if MSGDEBUG
+          Serial.print("SERVO RNG: ");
+          Serial.print(servo_obj[uartServo].range[0]);
+          Serial.print(" to ");
+          Serial.println(servo_obj[uartServo].range[1]);
+        #endif
+        }
+    
+    else if(myfunc == "AUT"){   
+          autoToggle = mydata.toInt();
+          
+          #if MSGDEBUG
+            Serial.print("AUTO VAL: ");
+            Serial.println(autoToggle);
+          #endif
+          }
+    
+    else if(myfunc == "POS"){
+           delete [] servo_obj[uartServo].positions;
+           servo_obj[uartServo].positions = new int [strLength];
+           servo_obj[uartServo].numNotes = strLength;       
+            
+          for(int i = 0; i < strLength; i++){
+            servo_obj[uartServo].positions[i] = (byte)mydata[i];
+            #if MSGDEBUG
+              Serial.print("Positions: ");
+              Serial.println(servo_obj[uartServo].positions[i]);
+            #endif
+            }
+            servo_obj[uartServo].countNotes();
+            }
+            
+    else if(myfunc == "TIM"){
+           delete [] servo_obj[uartServo].sequence;
+           servo_obj[uartServo].sequence = new int [strLength];  
 
-     //servo_obj[uartServo].countNotes(); <-- run function to calculate rest of relevant params (see ServoHandler)
+            
+          
+          
+          for(int i = 0; i < strLength; i++){
+            servo_obj[uartServo].sequence[i] = (byte)mydata[i];
+            #if MSGDEBUG
+              Serial.print("Servo timing: ");
+              Serial.println(servo_obj[uartServo].sequence[i]);
+            #endif
+            }          
+            servo_obj[uartServo].countNotes();
+            }
+    
+    else if(myfunc == "RET"){
+            servo_obj[uartServo].returnTime = mydata.toInt();
+            
+             #if MSGDEBUG
+              Serial.print("Servo return Time: ");
+              Serial.println( servo_obj[uartServo].returnTime);
+             #endif
+             }
+    
+    else if(myfunc == "MOD"){
+            servo_obj[uartServo].mode = mydata.toInt();
+            
+           #if MSGDEBUG
+            Serial.print("Servo mode: ");
+            Serial.println( servo_obj[uartServo].mode);
+           #endif
+           }  
+    
+    else if(myfunc == "CON"){
+            servo_obj[uartServo].control = mydata.toInt();
+            
+            #if MSGDEBUG
+              Serial.print("Servo control: ");
+              Serial.println( servo_obj[uartServo].control);
+            #endif
+            }
 
-     //setBPM("iPadBPMValue"); <-- optional function for if you want to change the BPM of the song
-
-     
-
-      digitalWrite(13,HIGH); // LED PIN 13 Indicates Information is Being Written...
-//     );
-       
-}
+                        #if MSGDEBUG
+                        Serial.println("-----------------------------------------------------------------------------");                                  
+                        #endif
+                        }  
