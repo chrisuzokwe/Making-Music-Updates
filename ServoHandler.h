@@ -29,34 +29,26 @@ class ServoHandler {
 
   public:
     ServoHandler();
-    int *range;
-   
-    //int servoNum; Not Sure if this is needed
-    
+        
     bool control; // 0 - Manual Control   1 - Sequencer On
-    int mode; // 0 - Striking Servo   1 - Positional Servo
+    int mode; // 0 - Striking Servo   1 - Positional Servo 2 - Stepping Servo
 
     int waitTime;
     unsigned long lastHitTime;
     unsigned long returnTime;
     
     int numNotes;
-    int numSingleNotes;
     int *sequence; //
     int *positions; //
-    int *noDupPos; // 
     int seqIdx;
     void sequenceStep(); //
     void countNotes(); //
 
-        
+    bool stepReady;    
         
 };
 
 void setBPM(int measure);
-
-int compare (const void * a, const void * b);
-
     
     
 #endif /*ServoHandler_h*/
