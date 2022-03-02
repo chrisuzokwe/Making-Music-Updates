@@ -1,3 +1,3 @@
-# Making-Music-Updates
-Revisions for ExCITe's Making Music Project
---Added functionality for automating/digitizing servo movement
+# apple educators worksop
+Swift+Arduino music project
+made for teachers at ExCiTes apple educators workshop
